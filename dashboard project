@@ -1,0 +1,116 @@
+import dash
+from dash import dcc, html
+import pandas as pd
+
+# Sample DataFrame to represent launch site data (adjust according to actual data)
+spacex_df = pd.DataFrame({
+    'Launch_Site': ['Site A', 'Site B', 'Site C', 'Site D'],
+    'Success_Count': [100, 150, 120, 90],
+    'Failure_Count': [10, 5, 20, 30]
+})
+
+# Initialize the app
+app = dash.Dash(__name__)
+
+# Dropdown options based on the launch sites
+dropdown_options = [{'label': 'All Sites', 'value': 'ALL'}] + [
+    {'label': site, 'value': site} for site in spacex_df['Launch_Site']
+]
+
+# Layout of the app
+app.layout = html.Div([
+    # Dropdown menu for selecting launch site
+    dcc.Dropdown(
+        id='site-dropdown',
+        options=dropdown_options,
+        value='ALL',  # Default value (All Sites selected)
+        placeholder='Select a Launch Site here',  # Text to show when nothing is selected
+        searchable=True,  # Allow searching within dropdown options
+    ),
+    
+    # Output area for displaying success count and failure count
+    html.Div(id='site-details')
+])
+
+# Callback to update the pie chart based on the selected site
+@app.callback(
+    Output('success-pie-chart', 'figure'),
+    [Input('site-dropdown', 'value')]
+)
+def update_pie_chart(selected_site):
+    if selected_site == 'ALL':
+        # Pie chart for all sites
+        success_count = spacex_df[spacex_df['class'] == 1].shape[0]
+        failure_count = spacex_df[spacex_df['class'] == 0].shape[0]
+        data = {'Outcome': ['Success', 'Failure'], 'Count': [success_count, failure_count]}
+    else:
+        # Filter data based on selected site
+        site_data = spacex_df[spacex_df['Launch_Site'] == selected_site]
+        success_count = site_data[site_data['class'] == 1].shape[0]
+        failure_count = site_data[site_data['class'] == 0].shape[0]
+        data = {'Outcome': ['Success', 'Failure'], 'Count': [success_count, failure_count]}
+    
+    # Create pie chart using Plotly Express
+    fig = px.pie(data, names='Outcome', values='Count', title=f"Launch Success Rates - {selected_site}")
+    
+    return fig
+    # Layout with dropdown, range slider for payload, and pie chart
+app.layout = html.Div([
+    # Dropdown menu for selecting launch site
+    dcc.Dropdown(
+        id='site-dropdown',
+        options=dropdown_options,
+        value='ALL',  # Default value (All Sites selected)
+        placeholder='Select a Launch Site here',
+        searchable=True,
+    ),
+    
+    # Range slider for selecting payload mass range
+    dcc.RangeSlider(
+        id='payload-slider',
+        min=0,  # Min payload value in Kg
+        max=10000,  # Max payload value in Kg
+        step=1000,  # Step interval in Kg
+        value=[0, 10000],  # Initial selected range for payload
+        marks={i: f'{i} Kg' for i in range(0, 10001, 1000)},  # Marks on the slider for every 1000 Kg
+    ),
+    
+    # Pie chart to display success/failure count
+    dcc.Graph(id='success-pie-chart'),
+])
+# Callback to update the scatter plot based on the selected site and payload range
+@app.callback(
+    Output('success-payload-scatter-chart', 'figure'),
+    [
+        Input('site-dropdown', 'value'),
+        Input('payload-slider', 'value')
+    ]
+)
+def update_scatter_chart(selected_site, selected_payload_range):
+    # Filter data based on the selected payload range
+    min_payload, max_payload = selected_payload_range
+    filtered_data = spacex_df[
+        (spacex_df['Payload_Mass_(kg)'] >= min_payload) & 
+        (spacex_df['Payload_Mass_(kg)'] <= max_payload)
+    ]
+    
+    # If a specific site is selected, filter further by the launch site
+    if selected_site != 'ALL':
+        filtered_data = filtered_data[filtered_data['Launch_Site'] == selected_site]
+    
+    # Create scatter plot using Plotly Express
+    fig = px.scatter(
+        filtered_data,
+        x='Payload_Mass_(kg)',
+        y='class',
+        color='Booster_Version',  # Color points based on the Booster Version
+        title=f"Launch Success vs Payload Mass - {selected_site} (Payload: {min_payload}-{max_payload} Kg)",
+        labels={'class': 'Launch Outcome (1 = Success, 0 = Failure)', 'Payload_Mass_(kg)': 'Payload Mass (kg)'},
+    )
+    
+    return fig
+
+# Run the Dash app
+if __name__ == '__main__':
+    app.run_server(debug=True)
+    
